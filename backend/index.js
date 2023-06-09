@@ -3,7 +3,7 @@ const bodyParser = require("body-parser");
 var cors = require("cors");
 const { spawn, exec } = require("child_process");
 const fs = require("fs");
-
+const serverless = require("serverless-http");
 const app = express();
 
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -73,7 +73,11 @@ app.post("/scrapy", async (req, res, next) => {
   const cmd = exec(
     //sample param1 domains=buyandsell.gc.ca
     //sample param2 start=https://buyandsell.gc.ca/for-businesses
+<<<<<<< Updated upstream:backend/wordlist_scrapper/wordlist_scrapper/spiders/app.js
     `scrapy crawl keybas -a domains=${param1} -a start=${param2} ${to_add_string}`,
+=======
+    `cd ./wordlist_scrapper/wordlist_scrapper/spiders && scrapy crawl keybas -a domains=${param1} -a start=${param2} ${to_add_string}`,
+>>>>>>> Stashed changes:backend/index.js
     (error, stdout, stderr) => {
       if (error) {
         console.log(
@@ -98,7 +102,12 @@ app.post("/scrapy", async (req, res, next) => {
       if (!success) {
         return;
       }
+<<<<<<< Updated upstream:backend/wordlist_scrapper/wordlist_scrapper/spiders/app.js
       const filePath = "./scrapy_output.csv";
+=======
+      const filePath =
+        "./wordlist_scrapper/wordlist_scrapper/spiders/scrapy_output.csv";
+>>>>>>> Stashed changes:backend/index.js
       try {
         fs.exists(filePath, function (exists) {
           //https://stackoverflow.com/questions/10046039/node-js-send-file-in-response
@@ -121,3 +130,4 @@ app.post("/scrapy", async (req, res, next) => {
 });
 
 app.listen(5000, () => console.log("server listening on port 5000"));
+// module.exports.handler = serverless(app);
