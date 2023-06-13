@@ -1,9 +1,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 var cors = require("cors");
-const { spawn, exec } = require("child_process");
-const fs = require("fs");
-const serverless = require("serverless-http");
+const puppeteer = require("puppeteer");
 const app = express();
 
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -12,122 +10,112 @@ app.use(express.json());
 
 app.post("/scrapy", async (req, res, next) => {
   console.log("Received post request at backend's /scrapy: ", req.body);
+  const wordlist = ["buyandsell"];
+  let allowedDomains = new Set(req.body.allowedDomains);
 
-  let param1;
-  let param2;
-  let param3;
-  let ms;
-  try {
-    let temp = req.body.time;
-    // console.log("temp type", typeof temp, " and is ", temp); //for error testing
-
-    if (!temp || isNaN(temp)) {
-      console.log("Forcing ms to be 2000");
-      temp = 2;
-    }
-    ms = temp * 1000;
-    param1 = req.body.allowedDomains[0];
-    param2 = req.body.startUrls[0];
-  } catch (err) {
-    return;
-  }
-
-  console.log("Process will run for (ms) ", ms);
-  if (!param1 || param1.trim() === "") {
-    console.log(
-      "allowedDomains input (param1) is empty, setting to buyandsell.gc.ca"
-    );
-    param1 = "buyandsell.gc.ca";
-  }
-  if (!param2 || param2.trim() === "") {
-    console.log(
-      "startUrls input (param2) is empty, setting to https://buyandsell.gc.ca/for-businesses"
-    );
-
-    param2 = "https://buyandsell.gc.ca/for-businesses";
-  }
-  if (
-    !req.body.deny ||
-    !Array.isArray(req.body.deny) ||
-    (Array.isArray(req.body.deny) &&
-      req.body.deny.length === 1 &&
-      req.body.deny[0].trim() === "")
-  ) {
-    param3 = [];
-    console.log("param3 is empty: ", param3);
+  const ds = [];
+  let startUrls = req.body.startUrls;
+  let time = req.body.time;
+  let deny = new Set();
+  if (req.body.deny[0] == "") {
   } else {
-    param3 = req.body.deny;
-    console.log("param3 is", param3);
-  }
-  let to_add_string = ``;
-
-  if (param3.length > 0) {
-    for (let i = 0; i < param3.length; ++i) {
-      to_add_string += `-a arg${i}=${param3[i]} `;
+    for (ele in req.body.deny) {
+      deny.add(ele);
     }
   }
-  to_add_string = to_add_string.trim();
+  if (allowedDomains.has("")) {
+    allowedDomains = new Set();
+    allowedDomains.add("buyandsell.gc.ca");
+  }
+  if (startUrls[0] == "") {
+    startUrls = ["https://buyandsell.gc.ca/for-businesses"];
+  }
+  if (!time) {
+    time = 9;
+  }
 
-  let success = true;
-
-  const cmd = exec(
-    //sample param1 domains=buyandsell.gc.ca
-    //sample param2 start=https://buyandsell.gc.ca/for-businesses
-<<<<<<< Updated upstream:backend/wordlist_scrapper/wordlist_scrapper/spiders/app.js
-    `scrapy crawl keybas -a domains=${param1} -a start=${param2} ${to_add_string}`,
-=======
-    `cd ./wordlist_scrapper/wordlist_scrapper/spiders && scrapy crawl keybas -a domains=${param1} -a start=${param2} ${to_add_string}`,
->>>>>>> Stashed changes:backend/index.js
-    (error, stdout, stderr) => {
-      if (error) {
-        console.log(
-          "An error occured within scrapy. Gracefully handling and not closing server"
-        );
-        error = new Error(`Scrapy raised an error: ${error}`);
-
-        success = false;
-        res.status(error.code || 424);
-        res.json({ message: error.message || "An unknown error occurred!" });
-        return;
-      }
-    }
+  console.log(
+    "allowed:",
+    allowedDomains,
+    "start:",
+    startUrls,
+    "deny:",
+    deny,
+    "time:",
+    time
   );
 
-  await setTimeout(
-    () => {
-      cmd.kill();
-      console.log(
-        `Scrapy crawl's time is up. Scrapy crawl process has been killed`
-      );
-      if (!success) {
-        return;
+  const browser = await puppeteer.launch({ headless: "true" });
+  const page = await browser.newPage();
+
+  // Set screen size
+  await page.setViewport({ width: 1080, height: 1024 });
+
+  // seen ds
+  const visited = new Set();
+
+  // queue ds
+  const queue = [...startUrls];
+
+  // start timer
+  const startTime = Date.now();
+
+  while (queue.length > 0 && (Date.now() - startTime) / 1000 < time) {
+    // dequeue a URL
+    const url = queue.shift();
+
+    // skip if seen
+    if (visited.has(url)) {
+      continue;
+    }
+
+    // add it to seen
+    visited.add(url);
+
+    try {
+      await page.goto(url);
+
+      const bodyText = await page.$eval("body", (body) => body.innerText);
+      for (let word of wordlist) {
+        if (bodyText.includes(word)) {
+          ds.push(url);
+          break;
+        }
       }
-<<<<<<< Updated upstream:backend/wordlist_scrapper/wordlist_scrapper/spiders/app.js
-      const filePath = "./scrapy_output.csv";
-=======
-      const filePath =
-        "./wordlist_scrapper/wordlist_scrapper/spiders/scrapy_output.csv";
->>>>>>> Stashed changes:backend/index.js
-      try {
-        fs.exists(filePath, function (exists) {
-          //https://stackoverflow.com/questions/10046039/node-js-send-file-in-response
-          if (exists) {
-            res.writeHead(200, {
-              "Content-Type": "application/octet-stream",
-              "Content-Disposition":
-                "attachment; filename=" + "scrapy_output.csv",
-            });
-            fs.createReadStream(filePath).pipe(res);
-            return;
+
+      // Get all links on the page
+      const links = await page.$$eval("a", (as) => as.map((a) => a.href));
+      for (let link of links) {
+        try {
+          let domain = new URL(link).hostname;
+          domain = domain.replace(/^www\./, "");
+
+          let isDenied = false;
+          for (let term of deny) {
+            if (link.includes(term)) {
+              isDenied = true;
+              break;
+            }
           }
-          res.writeHead(400, { "Content-Type": "text/plain" });
-          res.end("ERROR File does not exist");
-        });
-      } catch (err) {}
-    },
-    ms ? ms : 2000
-  );
+
+          if (allowedDomains.has(domain) && !isDenied) {
+            console.log(link, " is ok for", domain);
+            queue.push(link);
+          } else {
+            console.log(link, " is not ok for", domain);
+          }
+        } catch {
+          continue;
+        }
+      }
+    } catch {}
+  }
+
+  await browser.close();
+  console.log(ds);
+  res.json(ds);
 });
 
 app.listen(5000, () => console.log("server listening on port 5000"));
+
 // module.exports.handler = serverless(app);

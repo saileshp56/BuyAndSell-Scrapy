@@ -39,14 +39,14 @@ function App() {
 
     axios
       .post(
-        "https://hgblwxjn32.execute-api.us-east-1.amazonaws.com/prod/scrapy",
-        // "http://localhost:5000/scrapy",
-
+        // "https://hgblwxjn32.execute-api.us-east-1.amazonaws.com/prod/scrapy",
+        "http://localhost:5000/scrapy",
         scrapeRequest
       )
       .then((response) => {
         const fileData = response.data;
-        const blob = new Blob([fileData], { type: "text/plain" });
+        console.log(fileData);
+        const blob = new Blob([fileData.join("\n")], { type: "text/plain" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.download = "scrapy_output.txt";
@@ -55,9 +55,9 @@ function App() {
       })
       .catch((err) => {
         console.error("Error ", err);
-        // alert(
-        //   `Something went wrong. Email the developer Sailesh Polavarapu with the following Error Code: ${err.response.status}\nand the following Error Message\n: ${err.response.data.message}`
-        // );
+        alert(
+          `Something went wrong. Email the developer Sailesh Polavarapu with the following Error Code: ${err.response.status}\nand the following Error Message\n: ${err.response.data.message}`
+        );
         console.log(err.response.data.message);
       });
   };
